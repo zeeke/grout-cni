@@ -1,0 +1,20 @@
+# Kind node image carrying the grout-cni plugin.
+#
+# grout itself is NOT installed here: it requires glibc >= 2.38 (its packages
+# and the official image are built against Debian trixie / CentOS Stream 10),
+# while every kindest/node base is Debian bookworm (glibc 2.36). grout therefore
+# runs as a DaemonSet from its official OCI image instead — see
+# deploy/grout-daemonset.yaml. The CNI plugin is a static (CGO_ENABLED=0) Go
+# binary with no such constraint.
+FROM kindest/node:v1.32.2
+
+ARG CNI_BIN_DIR=/opt/cni/bin
+
+COPY bin/grout-cni ${CNI_BIN_DIR}/grout-cni
+
+# Only the CNI binary is shipped — no *.conflist in /etc/cni/net.d.
+# In the e2e scenario grout-cni is a Multus *secondary* CNI (attached via the
+# grout-net NetworkAttachmentDefinition), so kindnet must remain the cluster's
+# primary network. A grout-cni conflist here would sort before
+# 10-kindnet.conflist and get auto-selected as Multus's default delegate,
+# hijacking every pod's primary interface.

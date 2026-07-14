@@ -1,0 +1,73 @@
+# grout runs as a privileged, host-networked DaemonSet so every node has a grout
+# dataplane reachable through its control-plane socket at /run/grout/grout.sock.
+#
+# The official OCI image is self-contained (CentOS Stream 10 / glibc 2.39), which
+# sidesteps the glibc mismatch that prevents grout from running directly inside
+# the Debian-bookworm kind node image. grout-cni (baked into the node image)
+# talks to the socket on the host. This matches the "grout runs on every node via
+# DaemonSet" deployment described in the project architecture.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: grout-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: grout
+  namespace: grout-system
+  labels:
+    app: grout
+spec:
+  selector:
+    matchLabels:
+      app: grout
+  template:
+    metadata:
+      labels:
+        app: grout
+    spec:
+      hostNetwork: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: grout
+          image: quay.io/grout/grout:0.16.0
+          # Run in test mode (-t): no hugepages / no real DPDK PMD, suitable for
+          # CI. The socket directory is created before grout binds the socket.
+          command:
+            - sh
+            - -c
+            - mkdir -p /run/grout && exec grout -t -s /run/grout/grout.sock -m 0666
+          securityContext:
+            privileged: true
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "test -S /run/grout/grout.sock"]
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            failureThreshold: 20
+          volumeMounts:
+            - name: grout-run
+              mountPath: /run/grout
+            # Mounted read-only purely so the e2e suite can assert the node image
+            # shipped the CNI artifacts.
+            - name: cni-bin
+              mountPath: /host/opt/cni/bin
+              readOnly: true
+            - name: cni-conf
+              mountPath: /host/etc/cni/net.d
+              readOnly: true
+      volumes:
+        - name: grout-run
+          hostPath:
+            path: /run/grout
+            type: DirectoryOrCreate
+        - name: cni-bin
+          hostPath:
+            path: /opt/cni/bin
+            type: Directory
+        - name: cni-conf
+          hostPath:
+            path: /etc/cni/net.d
+            type: Directory

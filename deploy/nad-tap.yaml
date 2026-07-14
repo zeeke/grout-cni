@@ -1,0 +1,39 @@
+# NetworkAttachmentDefinition for the Multus secondary-CNI scenario (Scenario 3).
+#
+# A pod that carries the annotation
+#   k8s.v1.cni.cncf.io/networks: grout-net
+# gets an extra interface (net1) backed by a grout TAP. The primary pod network
+# is still owned by the cluster CNI (kindnet in the e2e lane); grout-cni only
+# attaches this secondary interface.
+#
+# Pods attached to this NAD become L2 members of the grout bridge named below,
+# so they share the 10.243.0.0/24 link and reach each other through grout's L2
+# forwarding on the same node. The bridge holds the gateway address (.1); the
+# pod ports carry no L3 address.
+#
+# No default route is configured here on purpose: this is a secondary interface,
+# so it must not hijack the pod's default route.
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: grout-net
+  namespace: default
+spec:
+  config: |
+    {
+      "cniVersion": "1.1.0",
+      "name": "grout-net",
+      "plugins": [
+        {
+          "type": "grout-cni",
+          "groutSocketPath": "/run/grout/grout.sock",
+          "bridge": "br-grout-net",
+          "_comment": "logLevel (debug|info|warn|error, default warn) controls on-node plugin log verbosity; logs go to stderr, captured by the runtime.",
+          "logLevel": "warn",
+          "ipam": {
+            "type": "host-local",
+            "ranges": [[{"subnet": "10.243.0.0/24"}]]
+          }
+        }
+      ]
+    }
