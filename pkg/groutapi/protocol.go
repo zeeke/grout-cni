@@ -17,6 +17,7 @@ const (
 	// iface/address/route wire layouts below are unchanged across v1..v3.
 	apiVersion = 3
 
+	// DefaultSocketPath is the default path to grout's Unix control socket.
 	DefaultSocketPath = "/run/grout/grout.sock"
 )
 

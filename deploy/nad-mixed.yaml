@@ -28,7 +28,7 @@ spec:
       "name": "grout-shared-tap",
       "plugins": [
         {
-          "type": "grout-k-cni",
+          "type": "grout-cni",
           "groutSocketPath": "/run/grout/grout.sock",
           "bridge": "br-shared",
           "interfaceType": "tap",
@@ -52,7 +52,7 @@ spec:
       "name": "grout-shared-virtio",
       "plugins": [
         {
-          "type": "grout-k-cni",
+          "type": "grout-cni",
           "groutSocketPath": "/run/grout/grout.sock",
           "bridge": "br-shared",
           "interfaceType": "virtio",

@@ -14,10 +14,12 @@ const (
 	lockAcquireTimeout = 60 * time.Second
 )
 
+// FileLock serializes concurrent CNI calls on a node using flock(2).
 type FileLock struct {
 	fd int
 }
 
+// NewFileLock opens (or creates) a lock file at path and returns a FileLock.
 func NewFileLock(path string) (*FileLock, error) {
 	if path == "" {
 		path = defaultLockPath
@@ -43,6 +45,7 @@ func NewFileLock(path string) (*FileLock, error) {
 	return &FileLock{fd: fd}, nil
 }
 
+// Lock acquires an exclusive flock, blocking up to lockAcquireTimeout.
 func (l *FileLock) Lock() error {
 	errCh := make(chan error, 1)
 	go func() {
@@ -60,10 +63,12 @@ func (l *FileLock) Lock() error {
 	}
 }
 
+// Unlock releases the flock.
 func (l *FileLock) Unlock() error {
 	return unix.Flock(l.fd, unix.LOCK_UN)
 }
 
+// Close closes the underlying file descriptor.
 func (l *FileLock) Close() error {
 	return unix.Close(l.fd)
 }

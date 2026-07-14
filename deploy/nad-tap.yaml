@@ -3,7 +3,7 @@
 # A pod that carries the annotation
 #   k8s.v1.cni.cncf.io/networks: grout-net
 # gets an extra interface (net1) backed by a grout TAP. The primary pod network
-# is still owned by the cluster CNI (kindnet in the e2e lane); grout-k-cni only
+# is still owned by the cluster CNI (kindnet in the e2e lane); grout-cni only
 # attaches this secondary interface.
 #
 # Pods attached to this NAD become L2 members of the grout bridge named below,
@@ -25,7 +25,7 @@ spec:
       "name": "grout-net",
       "plugins": [
         {
-          "type": "grout-k-cni",
+          "type": "grout-cni",
           "groutSocketPath": "/run/grout/grout.sock",
           "bridge": "br-grout-net",
           "_comment": "logLevel (debug|info|warn|error, default warn) controls on-node plugin log verbosity; logs go to stderr, captured by the runtime.",

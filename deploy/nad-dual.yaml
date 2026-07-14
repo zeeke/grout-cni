@@ -22,7 +22,7 @@ spec:
       "name": "grout-dual",
       "plugins": [
         {
-          "type": "grout-k-cni",
+          "type": "grout-cni",
           "groutSocketPath": "/run/grout/grout.sock",
           "bridge": "br-grout-dual",
           "ipam": {

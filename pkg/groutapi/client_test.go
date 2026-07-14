@@ -40,7 +40,7 @@ func (s *mockServer) serve() {
 }
 
 func (s *mockServer) close() {
-	s.listener.Close()
+	_ = s.listener.Close()
 }
 
 func makeMockIfaceEntry(id uint16, ifType InterfaceType, name string) []byte {
@@ -68,7 +68,7 @@ var mockFloodVTEPs = [][]byte{
 }
 
 func handleSuccessfulRequests(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		var hdr requestHeader
 		if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -160,7 +160,7 @@ func setupClient(t *testing.T) *Client {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 	return client
 }
 
@@ -174,7 +174,7 @@ func TestDial(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
-	client.Close()
+	_ = client.Close()
 }
 
 func TestDialFailsOnBadPath(t *testing.T) {
@@ -187,7 +187,7 @@ func TestDialFailsOnBadPath(t *testing.T) {
 func TestDialFailsOnBadHandshake(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		var hdr requestHeader
 		_ = binary.Read(conn, byteOrder, &hdr)
 		if hdr.PayloadLen > 0 {
@@ -225,7 +225,7 @@ func TestInterfaceAddPayload(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	captured := make(chan []byte, 4)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -256,7 +256,7 @@ func TestInterfaceAddPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	// A bridge is the gr_iface base only (no port info section).
 	if _, err := client.InterfaceAdd(InterfaceAddRequest{Name: "br0", Type: InterfaceTypeBridge}); err != nil {
@@ -295,7 +295,7 @@ func TestInterfaceAddVXLANPayload(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	captured := make(chan []byte, 1)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -326,7 +326,7 @@ func TestInterfaceAddVXLANPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	resp, err := client.InterfaceAdd(InterfaceAddRequest{
 		Name: "vxlan100",
@@ -507,7 +507,7 @@ func TestAddressAddIPv6Payload(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	captured := make(chan []byte, 1)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -533,7 +533,7 @@ func TestAddressAddIPv6Payload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	if err := client.AddressAdd(AddressAddRequest{
 		IfaceID: 5,
@@ -558,7 +558,7 @@ func TestRouteAddIPv6Payload(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	captured := make(chan []byte, 1)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -584,7 +584,7 @@ func TestRouteAddIPv6Payload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	if err := client.RouteAdd(RouteAddRequest{
 		VRFID: 2,
@@ -668,7 +668,7 @@ func TestFloodAddPayload(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	captured := make(chan []byte, 1)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -694,7 +694,7 @@ func TestFloodAddPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	if err := client.FloodAdd(FloodAddRequest{
 		VRFID:   3,
@@ -727,7 +727,7 @@ func TestAddressFlushPayload(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	captured := make(chan []byte, 2)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -753,7 +753,7 @@ func TestAddressFlushPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	if err := client.AddressFlush(7); err != nil {
 		t.Fatalf("AddressFlush: %v", err)
@@ -787,7 +787,7 @@ func TestFloodList(t *testing.T) {
 func TestServerError(t *testing.T) {
 	srv, sockPath := newMockServer(t)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -813,7 +813,7 @@ func TestServerError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	err = client.InterfaceDel(InterfaceDelRequest{IfaceID: 1})
 	if err == nil {
@@ -894,7 +894,7 @@ func TestInterfaceListNameStopsAtFirstNUL(t *testing.T) {
 
 	srv, sockPath := newMockServer(t)
 	srv.handler = func(conn net.Conn) {
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			var hdr requestHeader
 			if err := binary.Read(conn, byteOrder, &hdr); err != nil {
@@ -922,7 +922,7 @@ func TestInterfaceListNameStopsAtFirstNUL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
+	t.Cleanup(func() { _ = client.Close() })
 
 	ifaces, err := client.InterfaceList(InterfaceListRequest{})
 	if err != nil {

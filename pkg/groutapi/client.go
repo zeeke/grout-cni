@@ -1,3 +1,4 @@
+// Package groutapi implements a Go client for grout's Unix socket control API.
 package groutapi
 
 import (
@@ -126,7 +127,7 @@ func Dial(socketPath string) (*Client, error) {
 	}
 	c := &Client{conn: conn}
 	if err := c.hello(); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("grout handshake: %w", err)
 	}
 	return c, nil
@@ -217,10 +218,8 @@ func (c *Client) requestStream(msgType uint32, payload []byte) ([][]byte, error)
 // its terminator. Trimming only trailing NULs would keep that garbage; cutting
 // at the first NUL matches how grout itself (and grcli) reads the field.
 func cString(b []byte) string {
-	if i := bytes.IndexByte(b, 0); i >= 0 {
-		return string(b[:i])
-	}
-	return string(b)
+	before, _, _ := bytes.Cut(b, []byte{0})
+	return string(before)
 }
 
 // InterfaceList returns all interfaces matching the given type filter (0 for all).

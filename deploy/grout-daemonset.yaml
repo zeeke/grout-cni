@@ -3,7 +3,7 @@
 #
 # The official OCI image is self-contained (CentOS Stream 10 / glibc 2.39), which
 # sidesteps the glibc mismatch that prevents grout from running directly inside
-# the Debian-bookworm kind node image. grout-k-cni (baked into the node image)
+# the Debian-bookworm kind node image. grout-cni (baked into the node image)
 # talks to the socket on the host. This matches the "grout runs on every node via
 # DaemonSet" deployment described in the project architecture.
 apiVersion: v1

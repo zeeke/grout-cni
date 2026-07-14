@@ -28,7 +28,7 @@ const (
 
 	// CNI binary baked into the node image, mounted read-only into the grout
 	// pod at /host so the suite can assert it was shipped.
-	hostCNIBinary = "/host/opt/cni/bin/grout-k-cni"
+	hostCNIBinary = "/host/opt/cni/bin/grout-cni"
 
 	apiTimeout = 30 * time.Second
 )

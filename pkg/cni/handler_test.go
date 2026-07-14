@@ -52,7 +52,7 @@ func newMock() *mockGroutClient {
 	return &mockGroutClient{bridgeAddID: 10, memberAddID: 42}
 }
 
-func (m *mockGroutClient) InterfaceList(req groutapi.InterfaceListRequest) ([]groutapi.InterfaceInfo, error) {
+func (m *mockGroutClient) InterfaceList(_ groutapi.InterfaceListRequest) ([]groutapi.InterfaceInfo, error) {
 	m.listCalled = true
 	if m.listErr != nil {
 		return nil, m.listErr
@@ -140,7 +140,7 @@ func (m *mockGroutClient) memberAdd() *groutapi.InterfaceAddRequest {
 }
 
 func mockIPAMAdd(ipNet, gw string) IPAMAddFunc {
-	return func(config *PluginConf, args *skel.CmdArgs) (types.Result, error) {
+	return func(_ *PluginConf, _ *skel.CmdArgs) (types.Result, error) {
 		ip, ipnet, err := net.ParseCIDR(ipNet)
 		if err != nil {
 			return nil, err
@@ -155,28 +155,28 @@ func mockIPAMAdd(ipNet, gw string) IPAMAddFunc {
 	}
 }
 
-func mockIPAMAddNoIPs(config *PluginConf, args *skel.CmdArgs) (types.Result, error) {
+func mockIPAMAddNoIPs(_ *PluginConf, _ *skel.CmdArgs) (types.Result, error) {
 	return &types100.Result{CNIVersion: cniVersion}, nil
 }
 
-func mockMoveLinkOK(linkName, netnsPath string) error {
+func mockMoveLinkOK(_, _ string) error {
 	return nil
 }
 
-func mockMoveLinkFail(linkName, netnsPath string) error {
+func mockMoveLinkFail(_, _ string) error {
 	return os.ErrInvalid
 }
 
 // mockConfigureOK records the pod interface name into the result the way the
 // real implementation would, so result assertions stay meaningful.
-func mockConfigureOK(netnsPath, hostIfName, podIfName string, mtu int, result *types100.Result) error {
+func mockConfigureOK(_, _, _ string, _ int, result *types100.Result) error {
 	if len(result.Interfaces) > 0 {
 		result.Interfaces[0].Mac = "02:00:00:00:00:01"
 	}
 	return nil
 }
 
-func mockConfigureFail(netnsPath, hostIfName, podIfName string, mtu int, result *types100.Result) error {
+func mockConfigureFail(_, _, _ string, _ int, _ *types100.Result) error {
 	return os.ErrInvalid
 }
 
@@ -215,7 +215,7 @@ func TestHandleAdd_Success(t *testing.T) {
 	cfg.MoveLink = mockMoveLinkOK
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) {
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) {
 		ipamDelCalled = true
 	}
 
@@ -315,7 +315,7 @@ func TestHandleAdd_BridgeListFail(t *testing.T) {
 	cfg.IPAMAdd = mockIPAMAdd("10.0.0.5/24", "10.0.0.1")
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	_, err := HandleAdd(cfg)
 	require.Error(t, err)
@@ -330,7 +330,7 @@ func TestHandleAdd_BridgeCreateFail(t *testing.T) {
 	cfg.IPAMAdd = mockIPAMAdd("10.0.0.5/24", "10.0.0.1")
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	_, err := HandleAdd(cfg)
 	require.Error(t, err)
@@ -346,7 +346,7 @@ func TestHandleAdd_BridgeAddressFail(t *testing.T) {
 	cfg.IPAMAdd = mockIPAMAdd("10.0.0.5/24", "10.0.0.1")
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	_, err := HandleAdd(cfg)
 	require.Error(t, err)
@@ -365,7 +365,7 @@ func TestHandleAdd_MemberAddFail(t *testing.T) {
 	cfg.MoveLink = mockMoveLinkOK
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	_, err := HandleAdd(cfg)
 	require.Error(t, err)
@@ -382,7 +382,7 @@ func TestHandleAdd_MoveLinkFail(t *testing.T) {
 	cfg.MoveLink = mockMoveLinkFail
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	_, err := HandleAdd(cfg)
 	require.Error(t, err)
@@ -400,7 +400,7 @@ func TestHandleAdd_ConfigureFail(t *testing.T) {
 	cfg.ConfigurePodIface = mockConfigureFail
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	_, err := HandleAdd(cfg)
 	require.Error(t, err)
@@ -417,7 +417,7 @@ func TestHandleAdd_NoNetns(t *testing.T) {
 	cfg.IPAMAdd = mockIPAMAdd("10.0.0.5/24", "10.0.0.1")
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	result, err := HandleAdd(cfg)
 	require.NoError(t, err)
@@ -446,7 +446,7 @@ func TestHandleAdd_DualStack(t *testing.T) {
 	mock := newMock()
 	mock.addressAddErr = nil
 	cfg := newAddConfig(t, mock)
-	cfg.IPAMAdd = func(config *PluginConf, args *skel.CmdArgs) (types.Result, error) {
+	cfg.IPAMAdd = func(_ *PluginConf, _ *skel.CmdArgs) (types.Result, error) {
 		return &types100.Result{
 			CNIVersion: cniVersion,
 			IPs: []*types100.IPConfig{
@@ -497,7 +497,7 @@ func TestHandleAdd_NoIPs(t *testing.T) {
 	cfg.MoveLink = mockMoveLinkOK
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	result, err := HandleAdd(cfg)
 	require.NoError(t, err)
@@ -600,7 +600,7 @@ func TestPodMACFromResult_DualStackPrefersIPv4(t *testing.T) {
 func TestHandleAdd_IPAMAddFail(t *testing.T) {
 	mock := newMock()
 	cfg := newAddConfig(t, mock)
-	cfg.IPAMAdd = func(config *PluginConf, args *skel.CmdArgs) (types.Result, error) {
+	cfg.IPAMAdd = func(_ *PluginConf, _ *skel.CmdArgs) (types.Result, error) {
 		return nil, os.ErrInvalid
 	}
 
@@ -621,7 +621,7 @@ func TestHandleDel_Success(t *testing.T) {
 	cfg := newDelConfig(t, mock)
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	require.NoError(t, HandleDel(cfg))
 
@@ -635,7 +635,7 @@ func TestHandleDel_NoPort(t *testing.T) {
 	cfg := newDelConfig(t, mock)
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	require.NoError(t, HandleDel(cfg))
 
@@ -649,7 +649,7 @@ func TestHandleDel_InterfaceDelError(t *testing.T) {
 	cfg := newDelConfig(t, mock)
 
 	ipamDelCalled := false
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) { ipamDelCalled = true }
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) { ipamDelCalled = true }
 
 	require.NoError(t, HandleDel(cfg))
 
@@ -665,7 +665,7 @@ func TestHandleDel_GCEmptyBridge(t *testing.T) {
 		{ID: 42, Type: groutapi.InterfaceTypePort, Name: delPortName(), Domain: 10},
 	}
 	cfg := newDelConfig(t, mock)
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) {}
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) {}
 
 	require.NoError(t, HandleDel(cfg))
 	assert.True(t, mock.deleted(42), "member port should be deleted")
@@ -682,7 +682,7 @@ func TestHandleDel_KeepBridgeWithMembers(t *testing.T) {
 		{ID: 43, Type: groutapi.InterfaceTypePort, Name: "grk-otherport0", Domain: 10},
 	}
 	cfg := newDelConfig(t, mock)
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) {}
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) {}
 
 	require.NoError(t, HandleDel(cfg))
 	assert.True(t, mock.deleted(42), "member port should be deleted")
@@ -697,7 +697,7 @@ func TestHandleDel_GCSkipsRecycledNonBridge(t *testing.T) {
 		{ID: 42, Type: groutapi.InterfaceTypePort, Name: delPortName(), Domain: 10},
 	}
 	cfg := newDelConfig(t, mock)
-	cfg.IPAMDel = func(config *PluginConf, args *skel.CmdArgs) {}
+	cfg.IPAMDel = func(_ *PluginConf, _ *skel.CmdArgs) {}
 
 	require.NoError(t, HandleDel(cfg))
 	assert.True(t, mock.deleted(42), "member port should be deleted")
@@ -854,7 +854,7 @@ func TestLoadConfig(t *testing.T) {
 	raw := `{
 		"cniVersion": "1.0.0",
 		"name": "grout-k-test",
-		"type": "grout-k-cni",
+		"type": "grout-cni",
 		"groutSocketPath": "/tmp/test-grout.sock",
 		"ipam": {
 			"type": "host-local",
@@ -874,7 +874,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	raw := `{
 		"cniVersion": "1.0.0",
 		"name": "grout-k-test",
-		"type": "grout-k-cni",
+		"type": "grout-cni",
 		"ipam": {
 			"type": "host-local",
 			"ranges": [ [{"subnet": "10.0.0.0/24"}] ]
@@ -888,7 +888,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 }
 
 func TestLoadConfigMTUBounds(t *testing.T) {
-	base := `{"cniVersion":"1.0.0","name":"n","type":"grout-k-cni","ipam":{"type":"host-local"},"mtu":%d}`
+	base := `{"cniVersion":"1.0.0","name":"n","type":"grout-cni","ipam":{"type":"host-local"},"mtu":%d}`
 	for _, mtu := range []int{-1, 70000} {
 		_, err := LoadConfig([]byte(fmt.Sprintf(base, mtu)))
 		require.Error(t, err, "mtu %d should be rejected", mtu)
@@ -899,7 +899,7 @@ func TestLoadConfigMTUBounds(t *testing.T) {
 }
 
 func TestLoadConfigBridgeNameTooLong(t *testing.T) {
-	raw := `{"cniVersion":"1.0.0","name":"n","type":"grout-k-cni","bridge":"this-name-is-way-too-long","ipam":{"type":"host-local"}}`
+	raw := `{"cniVersion":"1.0.0","name":"n","type":"grout-cni","bridge":"this-name-is-way-too-long","ipam":{"type":"host-local"}}`
 	_, err := LoadConfig([]byte(raw))
 	require.Error(t, err, "an over-long explicit bridge name should be rejected")
 }
@@ -914,7 +914,7 @@ func TestBridgeNameForLongNetwork(t *testing.T) {
 }
 
 func TestLoadConfigInterfaceType(t *testing.T) {
-	base := `{"cniVersion":"1.0.0","name":"n","type":"grout-k-cni","ipam":{"type":"host-local"}%s}`
+	base := `{"cniVersion":"1.0.0","name":"n","type":"grout-cni","ipam":{"type":"host-local"}%s}`
 
 	conf, err := LoadConfig([]byte(fmt.Sprintf(base, "")))
 	require.NoError(t, err)
@@ -929,7 +929,7 @@ func TestLoadConfigInterfaceType(t *testing.T) {
 }
 
 func TestLoadConfigLogLevel(t *testing.T) {
-	base := `{"cniVersion":"1.0.0","name":"n","type":"grout-k-cni","ipam":{"type":"host-local"}%s}`
+	base := `{"cniVersion":"1.0.0","name":"n","type":"grout-cni","ipam":{"type":"host-local"}%s}`
 
 	conf, err := LoadConfig([]byte(fmt.Sprintf(base, "")))
 	require.NoError(t, err)
@@ -947,7 +947,7 @@ func TestLoadConfigBridgeOverride(t *testing.T) {
 	raw := `{
 		"cniVersion": "1.0.0",
 		"name": "grout-k-test",
-		"type": "grout-k-cni",
+		"type": "grout-cni",
 		"bridge": "br-custom",
 		"ipam": { "type": "host-local", "ranges": [ [{"subnet": "10.0.0.0/24"}] ] }
 	}`
@@ -961,7 +961,7 @@ func TestLoadConfigMissingIPAM(t *testing.T) {
 	raw := `{
 		"cniVersion": "1.0.0",
 		"name": "grout-k-test",
-		"type": "grout-k-cni"
+		"type": "grout-cni"
 	}`
 
 	_, err := LoadConfig([]byte(raw))
@@ -971,7 +971,7 @@ func TestLoadConfigMissingIPAM(t *testing.T) {
 func TestLoadConfigMissingName(t *testing.T) {
 	raw := `{
 		"cniVersion": "1.0.0",
-		"type": "grout-k-cni",
+		"type": "grout-cni",
 		"ipam": {
 			"type": "host-local"
 		}
@@ -993,7 +993,7 @@ func TestFileLock(t *testing.T) {
 
 	lock1, err := NewFileLock(path)
 	require.NoError(t, err, "NewFileLock")
-	defer lock1.Close()
+	defer func() { _ = lock1.Close() }()
 
 	require.NoError(t, lock1.Lock(), "Lock")
 	require.NoError(t, lock1.Unlock(), "Unlock")
@@ -1004,7 +1004,7 @@ func TestNewFileLockCreatesParentDir(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "grout-k-cni", "cni.lock")
 	lock, err := NewFileLock(path)
 	require.NoError(t, err, "NewFileLock should create the missing parent dir")
-	defer lock.Close()
+	defer func() { _ = lock.Close() }()
 	assert.True(t, fileExists(path), "lock file should exist after NewFileLock")
 }
 

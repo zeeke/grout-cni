@@ -121,6 +121,7 @@ type RouteDelRequest struct {
 // InterfaceType identifies the type of a grout interface.
 type InterfaceType uint8
 
+// grout interface type constants (gr_iface.h GR_IFACE_TYPE_*).
 const (
 	InterfaceTypeUndef  InterfaceType = 0
 	InterfaceTypeVRF    InterfaceType = 1

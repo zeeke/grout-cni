@@ -1,3 +1,5 @@
+// Package main implements the grout-cni binary, a CNI plugin that manages
+// pod network interfaces through grout's Unix socket API.
 package main
 
 import (
@@ -37,7 +39,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("connecting to grout: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	result, err := cni.HandleAdd(&cni.AddConfig{
 		Client:            client,
@@ -67,7 +69,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("connecting to grout: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	return cni.HandleDel(&cni.DelConfig{
 		Client:  client,
@@ -88,7 +90,7 @@ func cmdCheck(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("connecting to grout: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	return cni.HandleCheck(&cni.DelConfig{
 		Client: client,
@@ -110,7 +112,7 @@ func cmdGC(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("connecting to grout: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	return cni.HandleGC(&cni.GCConfig{
 		Client: client,
@@ -134,7 +136,7 @@ func cmdStatus(args *skel.CmdArgs) error {
 		return types.NewError(cni.ErrPluginNotAvailable,
 			fmt.Sprintf("grout not reachable at %s: %v", config.GroutSocketPath, err), "")
 	}
-	client.Close()
+	_ = client.Close()
 	return nil
 }
 
@@ -145,5 +147,5 @@ func main() {
 		Check:  cmdCheck,
 		GC:     cmdGC,
 		Status: cmdStatus,
-	}, version.PluginSupports(supportedVersions...), "grout-k-cni")
+	}, version.PluginSupports(supportedVersions...), "grout-cni")
 }

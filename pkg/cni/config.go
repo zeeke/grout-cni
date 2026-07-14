@@ -1,3 +1,5 @@
+// Package cni implements the CNI plugin handler for grout-cni, translating
+// CNI ADD/DEL/CHECK/GC/STATUS operations into grout API calls.
 package cni
 
 import (
@@ -8,7 +10,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 )
 
+// Plugin constants.
 const (
+	// DefaultSocketPath is the default path to grout's Unix control socket.
 	DefaultSocketPath = "/run/grout/grout.sock"
 
 	// grIfaceNameSize is grout's interface name limit (IFNAMSIZ, incl. NUL).
@@ -19,6 +23,7 @@ const (
 	ErrPluginNotAvailable uint = 50
 )
 
+// PluginConf is the CNI network configuration parsed from stdin.
 type PluginConf struct {
 	types.NetConf
 	GroutSocketPath string `json:"groutSocketPath,omitempty"`
@@ -40,11 +45,13 @@ type PluginConf struct {
 	LogLevel string `json:"logLevel,omitempty"`
 }
 
+// Interface type constants for the CNI config's interfaceType field.
 const (
 	InterfaceTypeTAP    = "tap"
 	InterfaceTypeVirtio = "virtio"
 )
 
+// LoadConfig parses and validates the CNI network configuration from stdin.
 func LoadConfig(stdin []byte) (*PluginConf, error) {
 	conf := &PluginConf{
 		GroutSocketPath: DefaultSocketPath,

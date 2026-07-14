@@ -1,4 +1,4 @@
-# Kind node image carrying the grout-k CNI plugin and its config.
+# Kind node image carrying the grout-cni plugin.
 #
 # grout itself is NOT installed here: it requires glibc >= 2.38 (its packages
 # and the official image are built against Debian trixie / CentOS Stream 10),
@@ -12,10 +12,9 @@ ARG CNI_BIN_DIR=/opt/cni/bin
 
 COPY bin/grout-cni ${CNI_BIN_DIR}/grout-cni
 
-# Only the CNI binary is shipped — no grout-k *.conflist in /etc/cni/net.d.
-# In the e2e scenario grout-k is a Multus *secondary* CNI (attached via the
+# Only the CNI binary is shipped — no *.conflist in /etc/cni/net.d.
+# In the e2e scenario grout-cni is a Multus *secondary* CNI (attached via the
 # grout-net NetworkAttachmentDefinition), so kindnet must remain the cluster's
-# primary network. A grout-k conflist here would sort before 10-kindnet.conflist
-# and get auto-selected as Multus's default delegate, hijacking every pod's
-# primary interface. The conflist (deploy/cni/10-grout-k.conflist) is the
-# Scenario-1 "grout as primary CNI" example and is intentionally not installed.
+# primary network. A grout-cni conflist here would sort before
+# 10-kindnet.conflist and get auto-selected as Multus's default delegate,
+# hijacking every pod's primary interface.

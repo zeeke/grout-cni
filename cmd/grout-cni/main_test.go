@@ -19,9 +19,9 @@ import (
 	"github.com/zeeke/grout-cni/pkg/groutapi"
 )
 
-func emptyIPAMDel(config *cni.PluginConf, args *skel.CmdArgs) {}
-func emptyMoveLink(linkName, netnsPath string) error          { return nil }
-func emptyConfigurePodIface(netnsPath, hostIfName, podIfName string, mtu int, result *types100.Result) error {
+func emptyIPAMDel(_ *cni.PluginConf, _ *skel.CmdArgs) {}
+func emptyMoveLink(_, _ string) error                  { return nil }
+func emptyConfigurePodIface(_, _, _ string, _ int, _ *types100.Result) error {
 	return nil
 }
 
@@ -35,7 +35,7 @@ func TestCmdAdd(t *testing.T) {
 	savedMove := moveLinkFunc
 	savedConfigure := configurePodIfaceFunc
 
-	ipamAddFunc = func(config *cni.PluginConf, args *skel.CmdArgs) (types.Result, error) {
+	ipamAddFunc = func(_ *cni.PluginConf, _ *skel.CmdArgs) (types.Result, error) {
 		return &types100.Result{
 			CNIVersion: types100.ImplementedSpecVersion,
 			IPs: []*types100.IPConfig{{
@@ -57,7 +57,7 @@ func TestCmdAdd(t *testing.T) {
 	cniConfig := `{
 		"cniVersion": "1.0.0",
 		"name": "grout-k-test",
-		"type": "grout-k-cni",
+		"type": "grout-cni",
 		"groutSocketPath": "` + sockPath + `",
 		"ipam": {
 			"type": "host-local",
@@ -82,14 +82,14 @@ func TestCmdAdd(t *testing.T) {
 	err = cmdAdd(args)
 
 	os.Stdout = origStdout
-	w.Close()
+	_ = w.Close()
 
 	require.NoError(t, err, "cmdAdd returned error")
 
 	var result types100.Result
 	err = json.NewDecoder(r).Decode(&result)
 	require.NoError(t, err, "decoding result")
-	r.Close()
+	_ = r.Close()
 
 	require.Len(t, result.IPs, 1, "expected 1 IP config")
 
@@ -106,7 +106,7 @@ func TestCmdDel(t *testing.T) {
 	ipamDelFunc = emptyIPAMDel
 	t.Cleanup(func() { ipamDelFunc = savedDel })
 	sockPath := filepath.Join(t.TempDir(), "grout.sock")
-	cniConfig := `{"cniVersion":"1.0.0","name":"test","type":"grout-k-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
+	cniConfig := `{"cniVersion":"1.0.0","name":"test","type":"grout-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
 
 	startMockServer(t, sockPath)
 
@@ -127,7 +127,7 @@ func TestCmdDel(t *testing.T) {
 // handler unit tests in pkg/cni.
 func TestCmdCheck(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "grout.sock")
-	cniConfig := `{"cniVersion":"1.0.0","name":"test","type":"grout-k-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
+	cniConfig := `{"cniVersion":"1.0.0","name":"test","type":"grout-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
 
 	startMockServer(t, sockPath)
 
@@ -155,11 +155,11 @@ func startMockServer(t *testing.T, sockPath string) {
 			go handleGroutRequests(conn)
 		}
 	}()
-	t.Cleanup(func() { listener.Close() })
+	t.Cleanup(func() { _ = listener.Close() })
 }
 
 func handleGroutRequests(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for {
 		var hdr groutapi.RequestHeader
 		if err := binary.Read(conn, binary.LittleEndian, &hdr); err != nil {
@@ -190,7 +190,7 @@ func handleGroutRequests(conn net.Conn) {
 func TestCmdStatus(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "grout.sock")
 	startMockServer(t, sockPath)
-	cniConfig := `{"cniVersion":"1.1.0","name":"test","type":"grout-k-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
+	cniConfig := `{"cniVersion":"1.1.0","name":"test","type":"grout-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
 
 	args := &skel.CmdArgs{StdinData: []byte(cniConfig)}
 	require.NoError(t, cmdStatus(args), "STATUS should succeed when grout is reachable")
@@ -199,7 +199,7 @@ func TestCmdStatus(t *testing.T) {
 func TestCmdStatusNotAvailable(t *testing.T) {
 	// No server listening at this path.
 	sockPath := filepath.Join(t.TempDir(), "absent.sock")
-	cniConfig := `{"cniVersion":"1.1.0","name":"test","type":"grout-k-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
+	cniConfig := `{"cniVersion":"1.1.0","name":"test","type":"grout-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
 
 	err := cmdStatus(&skel.CmdArgs{StdinData: []byte(cniConfig)})
 	require.Error(t, err, "STATUS should fail when grout is unreachable")
@@ -211,7 +211,7 @@ func TestCmdStatusNotAvailable(t *testing.T) {
 func TestCmdGC(t *testing.T) {
 	sockPath := filepath.Join(t.TempDir(), "grout.sock")
 	startMockServer(t, sockPath)
-	cniConfig := `{"cniVersion":"1.1.0","name":"test","type":"grout-k-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
+	cniConfig := `{"cniVersion":"1.1.0","name":"test","type":"grout-cni","groutSocketPath":"` + sockPath + `","ipam":{"type":"host-local","ranges":[[{"subnet":"10.0.0.0/24"}]]}}`
 
 	// No refs stored and IPAM GC is best-effort, so GC is a clean no-op success.
 	args := &skel.CmdArgs{ContainerID: "unused", StdinData: []byte(cniConfig)}

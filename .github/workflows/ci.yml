@@ -36,12 +36,15 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.62.0
+          version: v2.1.6
           install-mode: goinstall
           args: --out-format=colored-line-number
 
-      - name: Test
-        run: make test
+      - name: Test with coverage
+        run: go test -coverprofile=coverage.out ./...
+
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1
 
   e2e:
     runs-on: ubuntu-latest

@@ -23,7 +23,7 @@ func moveLinkToNamespace(linkName, netnsPath string) error {
 	if err != nil {
 		return fmt.Errorf("opening netns %s: %w", netnsPath, err)
 	}
-	defer nsHandle.Close()
+	defer func() { _ = nsHandle.Close() }()
 
 	if err := netlink.LinkSetNsFd(link, int(nsHandle.Fd())); err != nil {
 		return fmt.Errorf("moving link %q to netns %s: %w", linkName, netnsPath, err)
@@ -42,7 +42,7 @@ func configurePodInterface(netnsPath, hostIfName, podIfName string, mtu int, res
 	if err != nil {
 		return fmt.Errorf("opening netns %s: %w", netnsPath, err)
 	}
-	defer nsHandle.Close()
+	defer func() { _ = nsHandle.Close() }()
 
 	return nsHandle.Do(func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(hostIfName)
@@ -130,7 +130,7 @@ func verifyPodInterface(netnsPath, podIfName string, expectedIPs []*net.IPNet) e
 	if err != nil {
 		return fmt.Errorf("opening netns %s: %w", netnsPath, err)
 	}
-	defer nsHandle.Close()
+	defer func() { _ = nsHandle.Close() }()
 
 	return nsHandle.Do(func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(podIfName)
@@ -160,7 +160,7 @@ func verifyPodInterface(netnsPath, podIfName string, expectedIPs []*net.IPNet) e
 // address (the mask may differ between the CNI result and the kernel).
 func addrPresent(addrs []netlink.Addr, ip net.IP) bool {
 	for _, a := range addrs {
-		if a.IPNet != nil && a.IPNet.IP.Equal(ip) {
+		if a.IPNet != nil && a.IP.Equal(ip) {
 			return true
 		}
 	}

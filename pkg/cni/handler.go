@@ -52,6 +52,7 @@ type ConfigurePodIfaceFunc func(netnsPath, hostIfName, podIfName string, mtu int
 // verification can be swapped out in unit tests.
 type VerifyPodIfaceFunc func(netnsPath, podIfName string, expectedIPs []*net.IPNet) error
 
+// AddConfig carries the inputs for a CNI ADD call.
 type AddConfig struct {
 	Client            GroutClient
 	Config            *PluginConf
@@ -74,18 +75,20 @@ type DelConfig struct {
 	VerifyPodIface VerifyPodIfaceFunc
 }
 
+// HandleAdd implements CNI ADD: allocate an IP, create a grout port on the
+// network's bridge, and (for TAP) move the interface into the pod netns.
 func HandleAdd(cfg *AddConfig) (types.Result, error) {
 	lock, err := NewFileLock(lockPathForSocket(cfg.Config.GroutSocketPath))
 	if err != nil {
 		return nil, fmt.Errorf("creating lock: %w", err)
 	}
 	if err := lock.Lock(); err != nil {
-		lock.Close()
+		_ = lock.Close()
 		return nil, fmt.Errorf("acquiring lock: %w", err)
 	}
 	defer func() {
 		_ = lock.Unlock()
-		lock.Close()
+		_ = lock.Close()
 	}()
 
 	// The port name is derived deterministically from (containerID, ifName), so
@@ -340,18 +343,20 @@ func gatewaysFor(result *types100.Result) []*net.IPNet {
 	return gws
 }
 
+// HandleDel implements CNI DEL: find the grout port for this attachment (by its
+// deterministic name), delete it, GC the bridge if empty, and release IPAM.
 func HandleDel(cfg *DelConfig) error {
 	lock, err := NewFileLock(lockPathForSocket(cfg.Config.GroutSocketPath))
 	if err != nil {
 		return fmt.Errorf("creating lock: %w", err)
 	}
 	if err := lock.Lock(); err != nil {
-		lock.Close()
+		_ = lock.Close()
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
 	defer func() {
 		_ = lock.Unlock()
-		lock.Close()
+		_ = lock.Close()
 	}()
 
 	slog.Debug("CNI DEL", "containerID", cfg.Args.ContainerID, "ifName", cfg.Args.IfName)
@@ -446,12 +451,12 @@ func HandleCheck(cfg *DelConfig) error {
 		return fmt.Errorf("creating lock: %w", err)
 	}
 	if err := lock.Lock(); err != nil {
-		lock.Close()
+		_ = lock.Close()
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
 	defer func() {
 		_ = lock.Unlock()
-		lock.Close()
+		_ = lock.Close()
 	}()
 
 	name := groutPortName(cfg.Args.ContainerID, cfg.Args.IfName)
@@ -558,12 +563,12 @@ func HandleGC(cfg *GCConfig) error {
 		return fmt.Errorf("creating lock: %w", err)
 	}
 	if err := lock.Lock(); err != nil {
-		lock.Close()
+		_ = lock.Close()
 		return fmt.Errorf("acquiring lock: %w", err)
 	}
 	defer func() {
 		_ = lock.Unlock()
-		lock.Close()
+		_ = lock.Close()
 	}()
 
 	ifaces, err := cfg.Client.InterfaceList(groutapi.InterfaceListRequest{})
