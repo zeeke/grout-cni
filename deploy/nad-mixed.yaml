@@ -1,0 +1,65 @@
+# A pair of NetworkAttachmentDefinitions that share ONE grout bridge (br-shared)
+# and ONE subnet (10.245.0.0/24) but differ in interface type. This is the
+# mixed-workload scenario: a kernel-TAP pod and a DPDK (virtio/vhost-user) pod
+# on the same L2 domain, reaching each other through grout's bridge.
+#
+# Why two NADs? interfaceType is a property of the NAD, not the pod — a single
+# NAD hands every attached pod the same kind of port. To put a TAP pod and a
+# virtio pod on the same bridge we need two NADs that name the same "bridge".
+#
+# Why disjoint IPAM ranges on one subnet? host-local keys its allocation store
+# by network name, so two NADs sharing a subnet would each allocate from the top
+# of the range and could hand the SAME address to both pods. Splitting the
+# subnet into non-overlapping ranges (.10-.19 for TAP, .20-.29 for virtio) keeps
+# them on one L2 domain (same /24, same .1 gateway on the bridge) with no
+# collision.
+#
+# Used by TestK8s_VirtioTapPodToPod in test/k8se2e.
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: grout-shared-tap
+  namespace: default
+spec:
+  config: |
+    {
+      "cniVersion": "1.1.0",
+      "name": "grout-shared-tap",
+      "plugins": [
+        {
+          "type": "grout-k-cni",
+          "groutSocketPath": "/run/grout/grout.sock",
+          "bridge": "br-shared",
+          "interfaceType": "tap",
+          "ipam": {
+            "type": "host-local",
+            "ranges": [[{"subnet": "10.245.0.0/24", "rangeStart": "10.245.0.10", "rangeEnd": "10.245.0.19"}]]
+          }
+        }
+      ]
+    }
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: grout-shared-virtio
+  namespace: default
+spec:
+  config: |
+    {
+      "cniVersion": "1.1.0",
+      "name": "grout-shared-virtio",
+      "plugins": [
+        {
+          "type": "grout-k-cni",
+          "groutSocketPath": "/run/grout/grout.sock",
+          "bridge": "br-shared",
+          "interfaceType": "virtio",
+          "ipam": {
+            "type": "host-local",
+            "ranges": [[{"subnet": "10.245.0.0/24", "rangeStart": "10.245.0.20", "rangeEnd": "10.245.0.29"}]]
+          }
+        }
+      ]
+    }

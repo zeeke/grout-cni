@@ -1,0 +1,21 @@
+# Binaries
+bin/
+/grout-cni
+
+# Go
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Build artifacts
+*.o
+*.so
+*.test
+coverage.out

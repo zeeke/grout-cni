@@ -1,0 +1,87 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Tidy modules
+        run: go mod tidy && git diff --exit-code
+
+      - name: Build
+        run: make build
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62.0
+          install-mode: goinstall
+          args: --out-format=colored-line-number
+
+      - name: Test
+        run: make test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Tidy modules
+        run: go mod tidy && git diff --exit-code
+
+      - name: E2E tests
+        run: make e2e
+
+  kind-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Tidy modules
+        run: go mod tidy && git diff --exit-code
+
+      - name: Create kind cluster with custom node image
+        run: make kind-setup
+
+      - name: Kind e2e tests
+        run: make kind-e2e

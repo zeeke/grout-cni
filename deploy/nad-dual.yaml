@@ -1,0 +1,37 @@
+# Dual-stack NetworkAttachmentDefinition for the Multus secondary-CNI
+# scenario: pods attached to this NAD get a secondary interface (net1) with
+# one address per family — IPv4 from 10.246.0.0/24 and IPv6 from
+# fd10:246::/64 (host-local allocates one address per range set).
+#
+# Pods on this NAD share the grout bridge below, so both families ride the
+# same L2 domain: IPv4 neighbor resolution via ARP, IPv6 via NDP, both
+# flooded through grout's bridge between member ports. The bridge holds the
+# per-family gateway addresses (.1 / ::1); the pod ports carry no L3 address.
+#
+# No default routes on purpose: this is a secondary interface, so it must
+# not hijack the pod's default route in either family.
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: grout-dual
+  namespace: default
+spec:
+  config: |
+    {
+      "cniVersion": "1.1.0",
+      "name": "grout-dual",
+      "plugins": [
+        {
+          "type": "grout-k-cni",
+          "groutSocketPath": "/run/grout/grout.sock",
+          "bridge": "br-grout-dual",
+          "ipam": {
+            "type": "host-local",
+            "ranges": [
+              [{"subnet": "10.246.0.0/24"}],
+              [{"subnet": "fd10:246::/64"}]
+            ]
+          }
+        }
+      ]
+    }

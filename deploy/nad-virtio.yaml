@@ -1,0 +1,47 @@
+# NetworkAttachmentDefinition for a virtio (DPDK) pod interface.
+#
+# A pod referencing this NAD gets a grout vhost-user socket instead of a kernel
+# TAP. There is NO kernel netdev in the pod: a DPDK application in the pod
+# connects to the socket with DPDK's net_virtio_user PMD and owns L2/L3 itself.
+# The grout vhost port still joins the per-network bridge, so DPDK pods and TAP
+# pods on the same grout network share one L2 domain.
+#
+# The CNI creates the socket under the grout socket directory (e.g.
+# /run/grout/vhost/<id>.sock) and returns its path in the CNI result
+# (interface.socketPath). To reach it, the pod MUST mount that host directory,
+# for example:
+#
+#   spec:
+#     containers:
+#       - name: dpdk-app
+#         volumeMounts:
+#           - { name: vhost, mountPath: /run/grout/vhost }
+#     volumes:
+#       - name: vhost
+#         hostPath: { path: /run/grout/vhost, type: DirectoryOrCreate }
+#
+# IPAM still allocates an address (reported in the result) for the DPDK app to
+# use; the CNI does not configure any kernel interface for it.
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: grout-virtio
+  namespace: default
+spec:
+  config: |
+    {
+      "cniVersion": "1.1.0",
+      "name": "grout-virtio",
+      "plugins": [
+        {
+          "type": "grout-k-cni",
+          "groutSocketPath": "/run/grout/grout.sock",
+          "bridge": "br-grout-virtio",
+          "interfaceType": "virtio",
+          "ipam": {
+            "type": "host-local",
+            "ranges": [[{"subnet": "10.242.0.0/24"}]]
+          }
+        }
+      ]
+    }
