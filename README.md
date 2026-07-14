@@ -1,7 +1,7 @@
 # grout-cni
 
 [![CI](https://github.com/zeeke/grout-cni/actions/workflows/ci.yml/badge.svg)](https://github.com/zeeke/grout-cni/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zeeke/grout-cni)](https://goreportcard.com/report/github.com/zeeke/grout-cni)
+[![Go Reference](https://pkg.go.dev/badge/github.com/zeeke/grout-cni.svg)](https://pkg.go.dev/github.com/zeeke/grout-cni)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A [CNI](https://www.cni.dev/) plugin for [grout](https://github.com/DPDK/grout), a DPDK-based graph router. It brings DPDK-accelerated networking to Kubernetes pods using TAP devices for standard workloads and **virtio interfaces for pods running DPDK applications** — no SR-IOV hardware required.
