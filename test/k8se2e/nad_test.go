@@ -419,7 +419,7 @@ func TestK8s_NADDualStack(t *testing.T) {
 	t.Logf("pod %s reached %s over IPv4 (%s) and IPv6 (%s)", a, b, ip4, ip6)
 }
 
-const testpmdImage = "grout-k-testpmd:e2e"
+const testpmdImage = "grout-cni-testpmd:e2e"
 
 // testpmdScript waits for the CNI-created vhost-user socket, then runs
 // dpdk-testpmd as a vhost-user client in icmpecho mode (replies to ARP + ICMP).

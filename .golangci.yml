@@ -9,20 +9,19 @@ linters:
     - unused
     - misspell
     - revive
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  revive:
-    rules:
-      - name: exported
-        severity: warning
-  misspell:
-    locale: US
-    # "ageing" is grout's API field naming (gr_l2.h: ageing_time,
-    # GR_BRIDGE_*_AGEING); keep it when referring to those.
-    ignore-words:
-      - ageing
+  settings:
+    errcheck:
+      check-type-assertions: true
+    revive:
+      rules:
+        - name: exported
+          severity: warning
+    misspell:
+      locale: US
+      # "ageing" is grout's API field naming (gr_l2.h: ageing_time,
+      # GR_BRIDGE_*_AGEING); keep it when referring to those.
+      ignore-rules:
+        - ageing
 
 run:
   timeout: 5m
