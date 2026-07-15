@@ -48,6 +48,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    strategy:
+      fail-fast: false
+      matrix:
+        grout-version: ["0.14.3", "0.15.0", "0.16.0", "0.16.1"]
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,12 +66,19 @@ jobs:
       - name: Tidy modules
         run: go mod tidy && git diff --exit-code
 
-      - name: E2E tests
+      - name: E2E tests (grout ${{ matrix.grout-version }})
         run: make e2e
+        env:
+          GROUT_VERSION: ${{ matrix.grout-version }}
 
   kind-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        grout-version: ["0.14.3", "0.15.0", "0.16.0", "0.16.1"]
 
     steps:
       - uses: actions/checkout@v4
@@ -84,5 +96,7 @@ jobs:
       - name: Create kind cluster with custom node image
         run: make kind-setup
 
-      - name: Kind e2e tests
+      - name: Kind e2e tests (grout ${{ matrix.grout-version }})
         run: make kind-e2e
+        env:
+          GROUT_VERSION: ${{ matrix.grout-version }}

@@ -7,6 +7,8 @@ KIND_CONFIG ?= deploy/kind-config.yaml
 MULTUS_MANIFEST ?= https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/v4.1.0/deployments/multus-daemonset.yml
 E2E_POD_IMAGE ?= busybox:1.36
 TESTPMD_IMAGE ?= grout-cni-testpmd:e2e
+GROUT_VERSION ?= 0.16.0
+GROUT_IMAGE ?= quay.io/grout/grout:$(GROUT_VERSION)
 
 .PHONY: all build test e2e lint image clean kind-node-image kind-e2e kind-setup kind-teardown help
 
@@ -21,7 +23,7 @@ test: ## Run unit tests
 	go test ./...
 
 e2e: ## Run integration tests (requires Docker + grout container)
-	go test -v -tags=e2e ./test/e2e/...
+	GROUT_IMAGE=$(GROUT_IMAGE) go test -v -tags=e2e ./test/e2e/...
 
 lint: ## Run golangci-lint
 	golangci-lint run ./...
@@ -39,8 +41,9 @@ kind-e2e: ## Run full Kubernetes e2e (requires a running kind cluster)
 	@echo "=== Verifying kind cluster ==="
 	kubectl cluster-info
 	kubectl get nodes -o wide
-	@echo "=== Deploying grout DaemonSet ==="
+	@echo "=== Deploying grout DaemonSet ($(GROUT_IMAGE)) ==="
 	kubectl apply -f deploy/grout-daemonset.yaml
+	kubectl -n grout-system set image daemonset/grout grout=$(GROUT_IMAGE)
 	kubectl rollout status daemonset/grout -n grout-system --timeout=240s
 	kubectl get pods -n grout-system -o wide
 	@echo "=== Installing Multus (secondary-CNI scenario) ==="
