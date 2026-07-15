@@ -19,7 +19,18 @@ import (
 	"github.com/zeeke/grout-cni/pkg/groutapi"
 )
 
-const groutImage = "quay.io/grout/grout:0.16.0"
+// defaultGroutImage is used when GROUT_IMAGE is not set in the environment.
+// CI overrides it to exercise the suite against multiple grout versions.
+const defaultGroutImage = "quay.io/grout/grout:0.16.0"
+
+// groutImage returns the grout container image under test. Set GROUT_IMAGE
+// (e.g. "quay.io/grout/grout:0.15.0") to run against a specific version.
+func groutImage() string {
+	if img := os.Getenv("GROUT_IMAGE"); img != "" {
+		return img
+	}
+	return defaultGroutImage
+}
 
 var sharedClient *groutapi.Client
 
@@ -33,7 +44,7 @@ func TestMain(m *testing.M) {
 	defer func() { _ = os.RemoveAll(sockDir) }()
 
 	req := testcontainers.ContainerRequest{
-		Image: groutImage,
+		Image: groutImage(),
 		Cmd:   []string{"/usr/bin/grout", "-t", "-s", "/run/grout/grout.sock", "-m", "0666"},
 		HostConfigModifier: func(hc *container.HostConfig) {
 			hc.Privileged = true
