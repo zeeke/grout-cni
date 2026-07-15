@@ -51,9 +51,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The groutapi client speaks grout API v3 (GR_API_VERSION), which is
-        # the 0.16.x line; older grout releases reject the hello handshake.
-        # Add newer 0.16.z (or future v3-compatible) tags here as they ship.
         grout-version: ["0.16.0", "0.16.1"]
 
     steps:
@@ -81,8 +78,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # See the e2e job: limited to grout API v3 (0.16.x) releases, which
-        # are the versions the groutapi client can handshake with.
         grout-version: ["0.16.0", "0.16.1"]
 
     steps:
