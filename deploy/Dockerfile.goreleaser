@@ -1,0 +1,12 @@
+# Dockerfile used by GoReleaser during a release build.
+#
+# GoReleaser cross-compiles the static grout-cni binary for the target arch and
+# places it at the root of the build context, so the COPY source is just
+# "grout-cni" (unlike deploy/Dockerfile.cni, which copies from bin/ for local
+# `make image` builds). The resulting image is a minimal distroless image whose
+# entrypoint is the CNI plugin itself.
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY grout-cni /grout-cni
+
+ENTRYPOINT ["/grout-cni"]

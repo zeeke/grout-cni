@@ -2,6 +2,9 @@
 bin/
 /grout-cni
 
+# GoReleaser output
+dist/
+
 # Go
 vendor/
 

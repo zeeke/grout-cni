@@ -1,0 +1,69 @@
+name: Release
+
+# Releases are cut by pushing a semver tag, e.g.
+#   git tag -a v1.2.3 -m "v1.2.3" && git push origin v1.2.3
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release and upload assets
+  packages: write # push images to ghcr.io
+  id-token: write # keyless cosign signing (Sigstore OIDC)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history + tags so GoReleaser can build the changelog.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      # Gate the release on unit tests so a tag never ships broken binaries.
+      # (e2e / kind suites live behind build tags and run in ci.yml.)
+      - name: Unit tests
+        run: go test ./...
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install Syft (SBOM generation)
+        uses: anchore/sbom-action/download-syft@v0
+
+      # ghcr.io image name must be lowercase; ${{ github.repository }} already is
+      # for this repo, but lowercasing keeps it correct for any fork/owner.
+      - name: Compute registry image name
+        run: echo "REGISTRY_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_IMAGE: ${{ env.REGISTRY_IMAGE }}

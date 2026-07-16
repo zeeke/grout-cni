@@ -10,7 +10,7 @@ TESTPMD_IMAGE ?= grout-cni-testpmd:e2e
 GROUT_VERSION ?= 0.16.0
 GROUT_IMAGE ?= quay.io/grout/grout:$(GROUT_VERSION)
 
-.PHONY: all build test e2e lint image clean kind-node-image kind-e2e kind-setup kind-teardown help
+.PHONY: all build test e2e lint image clean kind-node-image kind-e2e kind-setup kind-teardown release-check release-snapshot help
 
 all: build
 
@@ -65,8 +65,14 @@ kind-e2e: ## Run full Kubernetes e2e (requires a running kind cluster)
 kind-teardown: ## Delete the kind e2e cluster
 	-kind delete cluster --name $(KIND_CLUSTER)
 
+release-check: ## Validate the GoReleaser configuration
+	goreleaser check
+
+release-snapshot: ## Dry-run the release pipeline locally (no publish, no tag needed)
+	REGISTRY_IMAGE=ghcr.io/zeeke/grout-cni goreleaser release --snapshot --clean
+
 clean: ## Remove build artifacts
-	rm -rf $(BINDIR)
+	rm -rf $(BINDIR) dist
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'

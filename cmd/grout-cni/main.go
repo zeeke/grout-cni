@@ -8,7 +8,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/version"
+	cniversion "github.com/containernetworking/cni/pkg/version"
 
 	"github.com/zeeke/grout-cni/pkg/cni"
 	"github.com/zeeke/grout-cni/pkg/groutapi"
@@ -17,6 +17,14 @@ import (
 // 1.1.0 is required for the GC and STATUS verbs; the runtime only dispatches
 // them when the network config's cniVersion is >= 1.1.0.
 var supportedVersions = []string{"0.3.1", "0.4.0", "1.0.0", "1.1.0"}
+
+// Build metadata, injected at link time via -ldflags -X (see .goreleaser.yaml).
+// Defaults keep `go build` and `go run` working without any flags.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 // Package-level function variables default to nil (use production implementation).
 // Tests can override with a defer/restore pattern.
@@ -147,5 +155,6 @@ func main() {
 		Check:  cmdCheck,
 		GC:     cmdGC,
 		Status: cmdStatus,
-	}, version.PluginSupports(supportedVersions...), "grout-cni")
+	}, cniversion.PluginSupports(supportedVersions...),
+		fmt.Sprintf("grout-cni %s (commit %s, built %s)", version, commit, date))
 }
