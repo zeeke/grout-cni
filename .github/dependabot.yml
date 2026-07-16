@@ -6,23 +6,19 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     commit-message:
       prefix: "deps"
     labels:
       - dependencies
       - go
-    groups:
-      go-dependencies:
-        patterns:
-          - "*"
 
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"
     labels:
@@ -39,7 +35,7 @@ updates:
       - "/deploy"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     commit-message:
       prefix: "deps"
     labels:
