@@ -1,6 +1,7 @@
 # grout-cni
 
 [![CI](https://github.com/zeeke/grout-cni/actions/workflows/ci.yml/badge.svg)](https://github.com/zeeke/grout-cni/actions/workflows/ci.yml)
+[![Release](https://github.com/zeeke/grout-cni/actions/workflows/release.yml/badge.svg)](https://github.com/zeeke/grout-cni/actions/workflows/release.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/zeeke/grout-cni.svg)](https://pkg.go.dev/github.com/zeeke/grout-cni)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -58,18 +59,29 @@ grout-cni works as:
 
 ### Install
 
-```sh
-# Build the CNI binary
-make build
+Download a prebuilt binary from the [releases page](https://github.com/zeeke/grout-cni/releases) and drop it into the CNI bin directory on each node:
 
-# Copy to the CNI bin directory on each node
-cp bin/grout-cni /opt/cni/bin/
+```sh
+VERSION=v0.1.0   # pick a release
+curl -sSL "https://github.com/zeeke/grout-cni/releases/download/${VERSION}/grout-cni_${VERSION#v}_linux_amd64.tar.gz" \
+  | tar -xz grout-cni
+install -m 0755 grout-cni /opt/cni/bin/
 ```
 
-Or use the container image:
+Each release also ships a `checksums.txt` (plus a cosign signature and certificate) so you can verify the download.
+
+Or pull the container image published to GitHub Container Registry (multi-arch: `linux/amd64`, `linux/arm64`):
 
 ```sh
-make image    # builds via podman
+docker pull ghcr.io/zeeke/grout-cni:v0.1.0   # or :latest
+```
+
+To build locally instead:
+
+```sh
+make build                 # bin/grout-cni (static, CGO_ENABLED=0)
+cp bin/grout-cni /opt/cni/bin/
+make image                 # container image via podman
 ```
 
 ### Configure
@@ -158,6 +170,26 @@ make image    # container image via podman
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow details.
+
+### Releasing
+
+Releases are fully automated with [GoReleaser](https://goreleaser.com/). Cutting a release is just pushing a semver tag:
+
+```sh
+git tag -a v1.2.3 -m "v1.2.3"
+git push origin v1.2.3
+```
+
+The [`release`](.github/workflows/release.yml) workflow then:
+
+- cross-compiles the `grout-cni` binary for `linux/amd64` and `linux/arm64`;
+- publishes a GitHub Release with the binary archives, `checksums.txt`, SBOMs, and an auto-generated changelog;
+- builds and pushes a multi-arch image to `ghcr.io/zeeke/grout-cni` (tags: `vX.Y.Z`, `vX.Y`, and `latest` for stable releases);
+- signs the checksums and container images with [cosign](https://docs.sigstore.dev/) (keyless / Sigstore).
+
+Tags containing a pre-release suffix (e.g. `v1.2.3-rc.1`) are marked as pre-releases and do **not** move the `latest` tag.
+
+Validate the release config locally with `goreleaser check`, or dry-run the whole pipeline with `goreleaser release --snapshot --clean`.
 
 ## Related projects
 

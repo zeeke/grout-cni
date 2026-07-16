@@ -1,0 +1,169 @@
+# GoReleaser configuration for grout-cni.
+#
+# Cutting a release is just pushing a semver tag:
+#
+#     git tag -a v1.2.3 -m "v1.2.3" && git push origin v1.2.3
+#
+# The .github/workflows/release.yml workflow then runs GoReleaser, which builds
+# the binaries, archives, checksums and SBOMs, publishes the GitHub Release, and
+# builds+pushes the multi-arch container image to ghcr.io.
+#
+# Validate locally with:  goreleaser check
+# Dry-run locally with:    goreleaser release --snapshot --clean
+version: 2
+
+project_name: grout-cni
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: grout-cni
+    main: ./cmd/grout-cni
+    binary: grout-cni
+    # grout-cni is a Linux-only CNI plugin (netlink, netns, TAP devices).
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    # main.version / main.commit / main.date are GoReleaser's default ldflag
+    # targets, injected into cmd/grout-cni/main.go.
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .FullCommit }}
+      - -X main.date={{ .CommitDate }}
+    # Reproducible builds: pin the binary mtime to the commit timestamp.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: grout-cni
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archive
+    artifacts: archive
+
+dockers:
+  - id: amd64
+    goos: linux
+    goarch: amd64
+    dockerfile: deploy/Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=A CNI plugin for grout, a DPDK-based graph router"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+  - id: arm64
+    goos: linux
+    goarch: arm64
+    dockerfile: deploy/Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.description=A CNI plugin for grout, a DPDK-based graph router"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}"
+    image_templates:
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-amd64"
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-arm64"
+  # Also publish the major.minor tag (e.g. v1.2) for consumers that want to
+  # track patch releases automatically.
+  - name_template: "{{ .Env.REGISTRY_IMAGE }}:v{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-amd64"
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-arm64"
+  # "latest" only moves for stable releases, never for pre-releases (-rc, -beta).
+  - name_template: "{{ .Env.REGISTRY_IMAGE }}:latest"
+    skip_push: auto
+    image_templates:
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-amd64"
+      - "{{ .Env.REGISTRY_IMAGE }}:{{ .Version }}-arm64"
+
+# Keyless (Sigstore) signatures. Requires cosign in the workflow and OIDC
+# permissions (id-token: write).
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+docker_signs:
+  - cmd: cosign
+    args:
+      - sign
+      - "--yes"
+      - "${artifact}@${digest}"
+    artifacts: manifests
+    output: true
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Container images
+
+    ```
+    docker pull {{ .Env.REGISTRY_IMAGE }}:{{ .Version }}
+    ```
+
+    **Full changelog**: https://github.com/{{ .Env.GITHUB_REPOSITORY }}/compare/{{ .PreviousTag }}...{{ .Tag }}
