@@ -1,12 +1,14 @@
 package groutapi
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -160,6 +162,7 @@ func setupClient(t *testing.T) *Client {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
+	client.apiVersion = apiVersion // mock interface entries use the v3 layout
 	t.Cleanup(func() { _ = client.Close() })
 	return client
 }
@@ -175,6 +178,31 @@ func TestDial(t *testing.T) {
 		t.Fatalf("Dial failed: %v", err)
 	}
 	_ = client.Close()
+}
+
+func TestDialNegotiatesAPIVersion(t *testing.T) {
+	srv, sockPath := newMockServer(t)
+	srv.handler = func(conn net.Conn) {
+		defer conn.Close()
+		var hdr requestHeader
+		if err := binary.Read(conn, byteOrder, &hdr); err != nil {
+			return
+		}
+		payload := make([]byte, hdr.PayloadLen)
+		if _, err := io.ReadFull(conn, payload); err != nil {
+			return
+		}
+		status := uint32(0)
+		if byteOrder.Uint32(payload) != apiVersion {
+			status = uint32(syscall.EBADMSG)
+		}
+		_ = binary.Write(conn, byteOrder, responseHeader{ForID: hdr.ID, Status: status})
+	}
+	go srv.serve()
+	t.Cleanup(srv.close)
+	client, err := Dial(sockPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
 }
 
 func TestDialFailsOnBadPath(t *testing.T) {
@@ -258,6 +286,7 @@ func TestInterfaceAddPayload(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = client.Close() })
 
+	client.apiVersion = apiVersion // payload assertions below use the v3 layout
 	// A bridge is the gr_iface base only (no port info section).
 	if _, err := client.InterfaceAdd(InterfaceAddRequest{Name: "br0", Type: InterfaceTypeBridge}); err != nil {
 		t.Fatalf("InterfaceAdd bridge: %v", err)
@@ -289,6 +318,33 @@ func TestInterfaceAddPayload(t *testing.T) {
 	devargs := string(vhost[offPortDevargs:])
 	assert.Contains(t, devargs, "net_vhost_", "a virtio port uses net_vhost devargs")
 	assert.Contains(t, devargs, "iface=/run/grout/vhost/vh0.sock", "vhost devargs must carry the socket path")
+
+	// QEMU owns the server socket, so grout must connect as a vhost client.
+	if _, err := client.InterfaceAdd(InterfaceAddRequest{
+		Name: "vm0", Type: InterfaceTypePort, VhostUserPath: "/run/grout/vm0.sock",
+		VhostClient: true, RXQueues: 1, QueueSize: 4096,
+	}); err != nil {
+		t.Fatalf("InterfaceAdd QEMU vhost: %v", err)
+	}
+	vm := <-captured
+	assert.Equal(t, uint16(1), byteOrder.Uint16(vm[offPortRXQueues:]))
+	assert.Equal(t, uint16(1), byteOrder.Uint16(vm[offPortTXQueues:]))
+	assert.Equal(t, uint16(4096), byteOrder.Uint16(vm[offPortRXQSize:]))
+	assert.Equal(t, uint16(4096), byteOrder.Uint16(vm[offPortTXQSize:]))
+	assert.Contains(t, string(vm[offPortDevargs:]), "queues=1,client=1")
+
+	// Grout API v11+ adds cp_id before the interface name. v0.19 uses v13.
+	client.apiVersion = 13
+	if _, err := client.InterfaceAdd(InterfaceAddRequest{
+		Name: "vm13", Type: InterfaceTypePort, VhostUserPath: "/run/grout/vm13.sock",
+		VhostClient: true, RXQueues: 1, QueueSize: 4096,
+	}); err != nil {
+		t.Fatalf("InterfaceAdd v13 QEMU vhost: %v", err)
+	}
+	vm13 := <-captured
+	assert.Len(t, vm13, ifaceSize+4+portInfoSize)
+	assert.Equal(t, "vm13", string(bytes.TrimRight(vm13[offIfaceName+4:offIfaceName+4+ifNameSize], "\x00")))
+	assert.Contains(t, string(vm13[offPortDevargs+4:]), "queues=1,client=1")
 }
 
 func TestInterfaceAddVXLANPayload(t *testing.T) {
@@ -328,6 +384,7 @@ func TestInterfaceAddVXLANPayload(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = client.Close() })
 
+	client.apiVersion = apiVersion // payload assertions below use the v3 layout
 	resp, err := client.InterfaceAdd(InterfaceAddRequest{
 		Name: "vxlan100",
 		Type: InterfaceTypeVXLAN,
@@ -922,6 +979,7 @@ func TestInterfaceListNameStopsAtFirstNUL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
+	client.apiVersion = apiVersion // mock interface entry uses the v3 layout
 	t.Cleanup(func() { _ = client.Close() })
 
 	ifaces, err := client.InterfaceList(InterfaceListRequest{})

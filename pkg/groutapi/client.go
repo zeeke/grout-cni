@@ -3,13 +3,17 @@ package groutapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 const (
@@ -64,7 +68,7 @@ const (
 	offIP6RteDest      = 2  // 16-byte IPv6 addr
 	offIP6RteDestPfx   = 18 // uint8_t prefixlen
 	offIP6RteNH        = 19 // 16-byte IPv6 addr
-	offIP6RteOrigin = 40 // uint8_t
+	offIP6RteOrigin    = 40 // uint8_t
 	offIP6RteExistOK   = 41 // uint8_t
 
 	// gr_ip6_route_del_req layout (20 bytes):
@@ -98,14 +102,19 @@ const (
 	floodTypeVTEP    = 1 // GR_FLOOD_T_VTEP
 
 	// C struct offsets within gr_iface
-	offIfaceID     = 0
-	offIfaceType   = 2
-	offIfaceFlags  = 4
-	offIfaceMTU    = 8  // __gr_iface_base.mtu
-	offIfaceDomain = 12 // __gr_iface_base.domain_id
-	offIfaceName   = 20
-	offIfaceInfo   = 292                             // start of info[] flexible array
-	offPortDevargs = offIfaceInfo + portInfoBaseSize // 306
+	offIfaceID      = 0
+	offIfaceType    = 2
+	offIfaceFlags   = 4
+	offIfaceState   = 6
+	offIfaceMTU     = 8  // __gr_iface_base.mtu
+	offIfaceDomain  = 12 // __gr_iface_base.domain_id
+	offIfaceName    = 20
+	offIfaceInfo    = 292                             // start of info[] flexible array
+	offPortDevargs  = offIfaceInfo + portInfoBaseSize // 306
+	offPortRXQueues = offIfaceInfo
+	offPortTXQueues = offIfaceInfo + 2
+	offPortRXQSize  = offIfaceInfo + 4
+	offPortTXQSize  = offIfaceInfo + 6
 
 	grIfaceIDUndef uint16 = 0
 	grIfaceFlagUp  uint16 = 1
@@ -114,20 +123,44 @@ const (
 
 // Client communicates with a grout instance over a Unix socket.
 type Client struct {
-	conn  net.Conn
-	mu    sync.Mutex
-	reqID atomic.Uint32
+	conn       net.Conn
+	mu         sync.Mutex
+	reqID      atomic.Uint32
+	stop       func() bool
+	apiVersion uint32
 }
 
 // Dial connects to grout at the given Unix socket path.
 func Dial(socketPath string) (*Client, error) {
-	conn, err := net.Dial("unix", socketPath)
+	return DialContext(context.Background(), socketPath)
+}
+
+// DialContext connects to grout and closes the connection when ctx is canceled.
+func DialContext(ctx context.Context, socketPath string) (*Client, error) {
+	var versionErr error
+	for version := uint32(maxAPIVersion); version >= apiVersion; version-- {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		client, err := dialVersion(ctx, socketPath, version)
+		if errors.Is(err, syscall.EBADMSG) {
+			versionErr = err
+			continue
+		}
+		return client, err
+	}
+	return nil, fmt.Errorf("no supported grout API version: %w", versionErr)
+}
+
+func dialVersion(ctx context.Context, socketPath string, version uint32) (*Client, error) {
+	conn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, "unix", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to grout: %w", err)
 	}
-	c := &Client{conn: conn}
-	if err := c.hello(); err != nil {
-		_ = conn.Close()
+	c := &Client{conn: conn, apiVersion: version}
+	c.stop = context.AfterFunc(ctx, func() { _ = conn.Close() })
+	if err := c.hello(version); err != nil {
+		_ = c.Close()
 		return nil, fmt.Errorf("grout handshake: %w", err)
 	}
 	return c, nil
@@ -135,13 +168,25 @@ func Dial(socketPath string) (*Client, error) {
 
 // Close closes the connection to grout.
 func (c *Client) Close() error {
+	if c.stop != nil {
+		c.stop()
+	}
 	return c.conn.Close()
 }
 
-func (c *Client) hello() error {
+// Grout API v11 added cp_id to __gr_iface_base, shifting name and info by
+// four bytes. Older servers retain the original layout.
+func (c *Client) ifaceOffsetShift() int {
+	if c.apiVersion >= 11 {
+		return 4
+	}
+	return 0
+}
+
+func (c *Client) hello(version uint32) error {
 	// gr_hello_req: uint32_t api_version + char version[128]
 	payload := make([]byte, 4+128)
-	byteOrder.PutUint32(payload[0:4], apiVersion)
+	byteOrder.PutUint32(payload[0:4], version)
 	copy(payload[4:], "grout-k-cni")
 	return c.request(TypeHello, payload, nil)
 }
@@ -153,6 +198,9 @@ func (c *Client) nextID() uint32 {
 func (c *Client) request(msgType uint32, payload []byte, resp any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err := c.conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		return err
+	}
 
 	id := c.nextID()
 	if err := writeRequest(c.conn, id, msgType, payload); err != nil {
@@ -167,7 +215,7 @@ func (c *Client) request(msgType uint32, payload []byte, resp any) error {
 		return fmt.Errorf("response ID mismatch: got %d, want %d", hdr.ForID, id)
 	}
 	if hdr.Status != 0 {
-		return fmt.Errorf("grout error: status %d", hdr.Status)
+		return fmt.Errorf("grout request: %w", syscall.Errno(hdr.Status))
 	}
 
 	if resp != nil && len(respPayload) > 0 {
@@ -185,6 +233,9 @@ func (c *Client) request(msgType uint32, payload []byte, resp any) error {
 func (c *Client) requestStream(msgType uint32, payload []byte) ([][]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err := c.conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		return nil, err
+	}
 
 	id := c.nextID()
 	if err := writeRequest(c.conn, id, msgType, payload); err != nil {
@@ -233,19 +284,24 @@ func (c *Client) InterfaceList(req InterfaceListRequest) ([]InterfaceInfo, error
 	}
 
 	result := make([]InterfaceInfo, 0, len(items))
+	shift := c.ifaceOffsetShift()
 	for _, data := range items {
-		if len(data) < ifaceSize {
+		if len(data) < ifaceSize+shift {
 			continue
 		}
 		id := byteOrder.Uint16(data[offIfaceID : offIfaceID+2])
 		ifType := data[offIfaceType]
 		domain := byteOrder.Uint16(data[offIfaceDomain : offIfaceDomain+2])
-		name := cString(data[offIfaceName : offIfaceName+ifNameSize])
+		flags := byteOrder.Uint16(data[offIfaceFlags : offIfaceFlags+2])
+		state := byteOrder.Uint16(data[offIfaceState : offIfaceState+2])
+		name := cString(data[offIfaceName+shift : offIfaceName+shift+ifNameSize])
 		result = append(result, InterfaceInfo{
 			ID:     id,
 			Type:   InterfaceType(ifType),
 			Name:   name,
 			Domain: domain,
+			Flags:  flags,
+			State:  state,
 		})
 	}
 	return result, nil
@@ -260,7 +316,8 @@ func (c *Client) InterfaceAdd(req InterfaceAddRequest) (*InterfaceAddResponse, e
 	// gr_iface_add_req = gr_iface (292) + the type-specific info section
 	// (gr_iface_info_port for ports, gr_iface_info_bridge for bridges,
 	// gr_iface_info_vxlan for VXLAN).
-	size := ifaceSize
+	shift := c.ifaceOffsetShift()
+	size := ifaceSize + shift
 	switch {
 	case isBridge:
 		size += bridgeInfoSize
@@ -283,19 +340,19 @@ func (c *Client) InterfaceAdd(req InterfaceAddRequest) (*InterfaceAddResponse, e
 	if req.MTU != 0 {
 		byteOrder.PutUint16(payload[offIfaceMTU:], req.MTU)
 	}
-	copy(payload[offIfaceName:offIfaceName+ifNameSize], req.Name)
+	copy(payload[offIfaceName+shift:offIfaceName+shift+ifNameSize], req.Name)
 
 	if isBridge {
 		// gr_iface_info_bridge: provide an explicit, valid locally-administered
 		// unicast MAC. Without an info section grout reads an uninitialized MAC
 		// (often with the multicast bit set), which the kernel rejects, leaving
 		// the bridge in a broken state.
-		copy(payload[offIfaceInfo+offBridgeInfoMAC:], bridgeMAC(req.Name))
+		copy(payload[offIfaceInfo+shift+offBridgeInfoMAC:], bridgeMAC(req.Name))
 	} else if isVXLAN {
 		if req.VXLAN == nil {
 			return nil, fmt.Errorf("interface add %q: VXLAN config required for a VXLAN interface", req.Name)
 		}
-		info := payload[offIfaceInfo:]
+		info := payload[offIfaceInfo+shift:]
 		byteOrder.PutUint32(info[offVxlanVNI:], req.VXLAN.VNI)
 		byteOrder.PutUint16(info[offVxlanEncapVRF:], req.VXLAN.EncapVRFID)
 		byteOrder.PutUint16(info[offVxlanDstPort:], req.VXLAN.DstPort)
@@ -303,6 +360,14 @@ func (c *Client) InterfaceAdd(req InterfaceAddRequest) (*InterfaceAddResponse, e
 			return nil, fmt.Errorf("interface add %q: VXLAN local address: %w", req.Name, err)
 		}
 	} else {
+		if req.RXQueues != 0 {
+			byteOrder.PutUint16(payload[offPortRXQueues+shift:], req.RXQueues)
+			byteOrder.PutUint16(payload[offPortTXQueues+shift:], req.RXQueues)
+		}
+		if req.QueueSize != 0 {
+			byteOrder.PutUint16(payload[offPortRXQSize+shift:], req.QueueSize)
+			byteOrder.PutUint16(payload[offPortTXQSize+shift:], req.QueueSize)
+		}
 		// gr_iface_info_port: set devargs. The DPDK vdev id (net_tap_<id> /
 		// net_vhost_<id>) must be unique per port, so derive it from the
 		// (already unique) interface name. A TAP uses iface=<kernel netdev name>;
@@ -310,11 +375,19 @@ func (c *Client) InterfaceAdd(req InterfaceAddRequest) (*InterfaceAddResponse, e
 		devargs := tapDevargs(req.Name)
 		if req.VhostUserPath != "" {
 			devargs = vhostDevargs(req.Name, req.VhostUserPath)
+			if req.RXQueues != 0 {
+				devargs += fmt.Sprintf(",queues=%d", req.RXQueues)
+			}
+			if req.VhostClient {
+				devargs += ",client=1"
+			}
+		} else if req.VhostClient {
+			return nil, fmt.Errorf("interface add %q: vhost client requires a socket path", req.Name)
 		}
 		if len(devargs) >= portDevargsSize {
 			return nil, fmt.Errorf("interface add %q: devargs too long (%d >= %d)", req.Name, len(devargs), portDevargsSize)
 		}
-		copy(payload[offPortDevargs:offPortDevargs+portDevargsSize], devargs)
+		copy(payload[offPortDevargs+shift:offPortDevargs+shift+portDevargsSize], devargs)
 	}
 
 	var wireResp struct {
