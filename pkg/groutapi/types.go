@@ -15,6 +15,11 @@ type InterfaceAddRequest struct {
 	// VhostUserPath, when set, creates the port with net_vhost devargs exposing
 	// a vhost-user socket at this path (for DPDK/virtio pods) instead of a TAP.
 	VhostUserPath string
+	// VhostClient connects to a socket owned by the peer (for example QEMU).
+	VhostClient bool
+	// RXQueues and QueueSize configure the DPDK port when non-zero.
+	RXQueues  uint16
+	QueueSize uint16
 	// VXLAN, when Type is InterfaceTypeVXLAN, configures the VXLAN interface.
 	VXLAN *VXLANConfig
 }
@@ -86,7 +91,12 @@ type InterfaceInfo struct {
 	Type   InterfaceType
 	Name   string
 	Domain uint16 // domain_id: the bridge this interface is a member of (0 = none)
+	Flags  uint16
+	State  uint16
 }
+
+// InterfaceStateRunning indicates the dataplane has started the interface.
+const InterfaceStateRunning uint16 = 1
 
 // AddressAddRequest contains parameters for adding an IP address to an interface.
 type AddressAddRequest struct {

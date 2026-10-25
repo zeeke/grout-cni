@@ -13,9 +13,11 @@ var byteOrder = binary.LittleEndian
 const (
 	maxMsgLen = 128 * 1024
 	// apiVersion is grout's GR_API_VERSION. grout rejects the hello handshake
-	// (EBADMSG) when this does not match the server. grout 0.16.x speaks v3; the
-	// iface/address/route wire layouts below are unchanged across v1..v3.
+	// (EBADMSG) when this does not match the server. This is the oldest
+	// supported version; Dial probes newer versions first.
 	apiVersion = 3
+	// maxAPIVersion matches the newest grout headers checked for this client.
+	maxAPIVersion = 13
 
 	// DefaultSocketPath is the default path to grout's Unix control socket.
 	DefaultSocketPath = "/run/grout/grout.sock"
