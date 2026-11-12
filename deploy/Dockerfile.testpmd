@@ -4,7 +4,7 @@
 # connecting to the grout vhost-user socket the CNI created. With --no-huge,
 # DPDK >= 19.02 backs EAL memory with memfd, which is shareable over vhost-user,
 # so this works without hugepages — suitable for the kind CI lane.
-FROM fedora:44
+FROM fedora:45
 
 RUN dnf -y install dpdk iproute && dnf clean all
 
